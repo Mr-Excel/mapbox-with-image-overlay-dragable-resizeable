@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Mapbox GL JS Overlay Example</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <link href='https://api.mapbox.com/mapbox-gl-js/v2.9.2/mapbox-gl.css' rel='stylesheet' />
+  <style>
+      body { margin: 0; padding: 0; }
+      #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+      .marker {
+          background-color: red;
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          cursor: pointer;
+      }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<script src='https://api.mapbox.com/mapbox-gl-js/v2.9.2/mapbox-gl.js'></script>
+
+<script>
+  mapboxgl.accessToken = '<You Key Here>';
+  const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/streets-v11',
+    center: [74.2778593, 31.4809879], // Replace with the center coordinates of your choice
+    zoom: 15
+  });
+
+  let dragging = false;
+  let resizing = false;
+  let startCoord = null;
+  let currentMarker = null;
+  let imageOverlay = {
+    url: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT26MP9f5YdlTfN-2pikGFAXSyfPfT7l-wdhA&s',
+    coordinates: [
+      [74.2778593, 31.4829879], // top-left corner coordinates
+      [74.2798593, 31.4829879], // top-right corner coordinates
+      [74.2798593, 31.4809879], // bottom-right corner coordinates
+      [74.2778593, 31.4809879]  // bottom-left corner coordinates
+    ]
+  };
+
+  function createMarker(coord, index) {
+    const el = document.createElement('div');
+    el.className = 'marker';
+
+    const marker = new mapboxgl.Marker(el)
+      .setLngLat(coord)
+      .addTo(map);
+
+    el.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      resizing = true;
+      currentMarker = index;
+      startCoord = coord;
+      map.getCanvas().style.cursor = 'nwse-resize';
+    });
+
+    return marker;
+  }
+
+  let markers = imageOverlay.coordinates.map((coord, index) => createMarker(coord, index));
+
+  map.on('load', function () {
+    map.addSource('overlay', {
+      type: 'image',
+      url: imageOverlay.url,
+      coordinates: imageOverlay.coordinates
+    });
+
+    map.addLayer({
+      id: 'overlay',
+      source: 'overlay',
+      type: 'raster',
+      paint: {
+        'raster-opacity': 0.85
+      }
+    });
+
+    map.on('mousedown', function (e) {
+      if (e.originalEvent.target.nodeName === 'CANVAS') {
+        dragging = true;
+        startCoord = e.lngLat;
+        map.getCanvas().style.cursor = 'move';
+        map.dragPan.disable();
+      }
+    });
+
+    map.on('mousemove', function (e) {
+      if (dragging) {
+        const dx = e.lngLat.lng - startCoord.lng;
+        const dy = e.lngLat.lat - startCoord.lat;
+
+        imageOverlay.coordinates = imageOverlay.coordinates.map(coord => [coord[0] + dx, coord[1] + dy]);
+        map.getSource('overlay').setCoordinates(imageOverlay.coordinates);
+
+        markers.forEach((marker, index) => marker.setLngLat(imageOverlay.coordinates[index]));
+
+        startCoord = e.lngLat;
+      }
+
+      if (resizing && currentMarker !== null) {
+        imageOverlay.coordinates[currentMarker] = [e.lngLat.lng, e.lngLat.lat];
+        map.getSource('overlay').setCoordinates(imageOverlay.coordinates);
+        markers[currentMarker].setLngLat(e.lngLat);
+      }
+    });
+
+    map.on('mouseup', function () {
+      if (dragging) {
+        dragging = false;
+        map.getCanvas().style.cursor = '';
+        map.dragPan.enable();
+      }
+
+      if (resizing) {
+        resizing = false;
+        currentMarker = null;
+        map.getCanvas().style.cursor = '';
+      }
+
+      // Log the new coordinates
+      console.log('New Coordinates:', imageOverlay.coordinates);
+    });
+
+    map.on('mouseleave', function () {
+      if (dragging) {
+        dragging = false;
+        map.getCanvas().style.cursor = '';
+        map.dragPan.enable();
+      }
+
+      if (resizing) {
+        resizing = false;
+        currentMarker = null;
+        map.getCanvas().style.cursor = '';
+      }
+
+      // Log the new coordinates
+      console.log('New Coordinates:', imageOverlay.coordinates);
+    });
+  });
+</script>
+</body>
+</html>
